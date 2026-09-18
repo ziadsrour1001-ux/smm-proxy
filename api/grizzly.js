@@ -8,7 +8,7 @@ export default async function handler(req, res) {
   const API_KEY = process.env.GRIZZLY_API_KEY || "205837984918fa408d1ee6ce337bf04e";
   const { action, service, country, id } = req.query;
 
-  let targetUrl = `https://grizzlysms.com/st/api.php?api_key=${API_KEY}&action=${action}`;
+  let targetUrl = `https://api.grizzlysms.com/st/api.php?api_key=${API_KEY}&action=${action}`;
   if (service) targetUrl += `&service=${service}`;
   if (country) targetUrl += `&country=${country}`;
   if (id) targetUrl += `&id=${id}`;
