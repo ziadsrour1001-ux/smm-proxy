@@ -6,12 +6,13 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const API_KEY = process.env.GRIZZLY_API_KEY || "205837984918fa408d1ee6ce337bf04e";
-  const { action, service, country, id } = req.query;
+  const { action, service, country, id, status } = req.query;
 
   let targetUrl = `https://api.grizzlysms.com/stubs/handler_api.php?api_key=${API_KEY}&action=${action}`;
   if (service) targetUrl += `&service=${service}`;
-  if (country) targetUrl += `&country=${country}`;
+  if (country !== undefined && country !== null) targetUrl += `&country=${country}`;
   if (id) targetUrl += `&id=${id}`;
+  if (status) targetUrl += `&status=${status}`;
 
   try {
     const response = await fetch(targetUrl);
