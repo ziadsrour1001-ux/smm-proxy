@@ -1,3 +1,4 @@
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -12,47 +13,45 @@ export default async function handler(req, res) {
     return;
   }
 
-  // 1. مسار جلب الصور والشعارات الحقيقية لكل المنصات
+  // سحب الشعار الأصلي الحقيقي للخدمة بناءً على كود المنصة فقط
   if (req.query.action === 'getImage') {
-    const code = (req.query.code || '').toLowerCase();
-    const name = (req.query.name || code).toLowerCase().replace(/[^a-z0-9]/g, '');
+    const code = (req.query.code || '').toLowerCase().split('_')[0];
+    if (!code) return res.status(400).send('Missing code');
 
-    // محاولة جلب الشعار من مستودع الأيقونات المباشر عبر الاسم
-    const sources = [
-      `https://cdn.simpleicons.org/${name}`,
+    const iconUrls = [
       `https://img.sms-activate.org/assets/ico/${code}0.png`,
-      `https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${name}.com&size=64`
+      `https://img.sms-activate.org/assets/ico/${code}1.png`,
+      `https://img.sms-activate.org/assets/ico/${code}.png`
     ];
 
-    for (const url of sources) {
+    for (const url of iconUrls) {
       try {
-        const imgRes = await fetch(url, {
-          headers: { 'User-Agent': 'Mozilla/5.0' }
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+          }
         });
-        if (imgRes.ok && imgRes.headers.get('content-type')?.includes('image')) {
-          const buffer = await imgRes.arrayBuffer();
-          res.setHeader('Content-Type', imgRes.headers.get('content-type') || 'image/png');
+        if (response.ok) {
+          const buffer = await response.arrayBuffer();
+          res.setHeader('Content-Type', 'image/png');
           res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
           return res.send(Buffer.from(buffer));
         }
       } catch (e) {}
     }
 
-    // شعار بديل نظيف باسم الخدمة إذا لم تكن مسجلة
+    // إذا لم تكن الخدمة تملك أيقونة مخصصة في المستودع
     return res.redirect(`https://ui-avatars.com/api/?name=${encodeURIComponent(req.query.name || code)}&background=0284c7&color=fff&size=64&bold=true&length=2`);
   }
 
-  // 2. توجيه طلبات Grizzly API
+  // توجيه طلبات Grizzly API بالمفتاح
   const GRIZZLY_API_KEY = process.env.GRIZZLY_API_KEY || '205837984918fa408d1ee6ce337bf04e';
   const queryParams = new URLSearchParams(req.query);
   queryParams.set('api_key', GRIZZLY_API_KEY);
 
-  const targetUrl = `https://api.grizzlysms.com/stubs/handler_api.php?${queryParams.toString()}`;
-
   try {
-    const apiRes = await fetch(targetUrl);
+    const apiRes = await fetch(`https://api.grizzlysms.com/stubs/handler_api.php?${queryParams.toString()}`);
     const contentType = apiRes.headers.get('content-type') || '';
-
     if (contentType.includes('application/json')) {
       const data = await apiRes.json();
       return res.status(200).json(data);
@@ -64,4 +63,3 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Proxy request failed', details: error.message });
   }
 }
-
