@@ -1,4 +1,3 @@
-
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -13,24 +12,19 @@ export default async function handler(req, res) {
     return;
   }
 
-  // سحب الشعار الأصلي الحقيقي للخدمة بناءً على كود المنصة فقط
+  // 1. مسار جلب الصور وتخطي حظر السيرفرات
   if (req.query.action === 'getImage') {
     const code = (req.query.code || '').toLowerCase().split('_')[0];
     if (!code) return res.status(400).send('Missing code');
 
-    const iconUrls = [
+    const urls = [
       `https://img.sms-activate.org/assets/ico/${code}0.png`,
-      `https://img.sms-activate.org/assets/ico/${code}1.png`,
       `https://img.sms-activate.org/assets/ico/${code}.png`
     ];
 
-    for (const url of iconUrls) {
+    for (const url of urls) {
       try {
-        const response = await fetch(url, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-          }
-        });
+        const response = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
         if (response.ok) {
           const buffer = await response.arrayBuffer();
           res.setHeader('Content-Type', 'image/png');
@@ -40,12 +34,11 @@ export default async function handler(req, res) {
       } catch (e) {}
     }
 
-    // إذا لم تكن الخدمة تملك أيقونة مخصصة في المستودع
     return res.redirect(`https://ui-avatars.com/api/?name=${encodeURIComponent(req.query.name || code)}&background=0284c7&color=fff&size=64&bold=true&length=2`);
   }
 
-  // توجيه طلبات Grizzly API بالمفتاح
-  const GRIZZLY_API_KEY = process.env.GRIZZLY_API_KEY || '205837984918fa408d1ee6ce337bf04e';
+  // 2. توجيه طلبات الأرقام والأسعار بالمفتاح الرسمي المباشر
+  const GRIZZLY_API_KEY = '205837984918fa408d1ee6ce337bf04e';
   const queryParams = new URLSearchParams(req.query);
   queryParams.set('api_key', GRIZZLY_API_KEY);
 
