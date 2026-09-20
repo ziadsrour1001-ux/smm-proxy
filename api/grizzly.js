@@ -14,7 +14,6 @@ export default async function handler(req, res) {
 
   const GRIZZLY_API_KEY = '205837984918fa408d1ee6ce337bf04e';
 
-  // 1. مسار الصور
   if (req.query.action === 'getImage') {
     const code = (req.query.code || '').toLowerCase().split('_')[0];
     if (!code) return res.status(400).send('Missing code');
@@ -36,7 +35,7 @@ export default async function handler(req, res) {
     return res.status(404).end();
   }
 
-  // 2. توجيه طلب getPricesV3 الحقيقي
+  // تمرير الطلب بالكامل لجريزلي مع تحويل getPrices إلى getPricesV3 لجميع الدول
   const queryParams = new URLSearchParams(req.query);
   queryParams.set('api_key', GRIZZLY_API_KEY);
 
