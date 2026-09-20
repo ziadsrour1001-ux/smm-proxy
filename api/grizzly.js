@@ -13,10 +13,9 @@ export default async function handler(req, res) {
   }
 
   const GRIZZLY_API_KEY = '205837984918fa408d1ee6ce337bf04e';
-  const action = req.query.action;
 
   // 1. مسار الصور
-  if (action === 'getImage') {
+  if (req.query.action === 'getImage') {
     const code = (req.query.code || '').toLowerCase().split('_')[0];
     if (!code) return res.status(400).send('Missing code');
     const urls = [
@@ -37,36 +36,13 @@ export default async function handler(req, res) {
     return res.status(404).end();
   }
 
-  // 2. جلب مصفوفة المزودين والأسعار الحقيقية من واجهة جريزلي v2
-  if (action === 'getPrices') {
-    const service = req.query.service || 'wa';
-    try {
-      const v2Res = await fetch(`https://grizzlysms.com/api/v2/prices?service=${service}`, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'application/json, text/plain, */*',
-          'Referer': 'https://grizzlysms.com/'
-        }
-      });
-      if (v2Res.ok) {
-        const v2Data = await v2Res.json();
-        return res.status(200).json(v2Data);
-      }
-    } catch (e) {}
-
-    // بديل احتياطي مع معلمة freePrice الرسمية
-    try {
-      const fallbackRes = await fetch(`https://api.grizzlysms.com/stubs/handler_api.php?api_key=${GRIZZLY_API_KEY}&action=getPrices&service=${service}&freePrice=true`);
-      const fallbackData = await fallbackRes.json();
-      return res.status(200).json(fallbackData);
-    } catch (err) {
-      return res.status(500).json({ error: 'Failed to fetch prices', details: err.message });
-    }
-  }
-
-  // 3. طلبات شراء الأرقام وفحص الحالة
+  // 2. توجيه طلب getPricesV3 الحقيقي
   const queryParams = new URLSearchParams(req.query);
   queryParams.set('api_key', GRIZZLY_API_KEY);
+
+  if (req.query.action === 'getPrices') {
+    queryParams.set('action', 'getPricesV3');
+  }
 
   try {
     const apiRes = await fetch(`https://api.grizzlysms.com/stubs/handler_api.php?${queryParams.toString()}`);
