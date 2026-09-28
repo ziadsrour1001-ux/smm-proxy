@@ -3,8 +3,10 @@
 const GRIZZLY_API =
   "https://api.grizzlysms.com/stubs/handler_api.php";
 
-export default async function handler(req, res) {
+// المفتاح الخاص بك
+const DEFAULT_KEY = "205837984918fa408d1ee6ce337bf04e";
 
+export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader(
     "Access-Control-Allow-Methods",
@@ -20,9 +22,10 @@ export default async function handler(req, res) {
     return res.status(204).end();
   }
 
-  const API_KEY = process.env.GRIZZLY_API_KEY;
+  const API_KEY =
+    process.env.GRIZZLY_API_KEY || DEFAULT_KEY;
 
-  if (!API_KEY) {
+  if (!API_KEY || API_KEY === "YOUR_EXISTING_GRIZZLY_KEY") {
     return res.status(500).json({
       ok: false,
       error: "GRIZZLY_API_KEY_NOT_CONFIGURED"
@@ -32,14 +35,13 @@ export default async function handler(req, res) {
   try {
 
     /* =====================================================
-       1. Service image
+       1. SERVICE IMAGE
        ===================================================== */
 
     if (
       req.method === "GET" &&
       req.query.action === "getImage"
     ) {
-
       const code =
         (req.query.code || "")
           .toLowerCase()
@@ -55,9 +57,7 @@ export default async function handler(req, res) {
       ];
 
       for (const url of urls) {
-
         try {
-
           const response = await fetch(url, {
             headers: {
               "User-Agent": "Mozilla/5.0"
@@ -65,7 +65,6 @@ export default async function handler(req, res) {
           });
 
           if (response.ok) {
-
             const buffer =
               await response.arrayBuffer();
 
@@ -83,7 +82,6 @@ export default async function handler(req, res) {
               Buffer.from(buffer)
             );
           }
-
         } catch (_) {}
       }
 
@@ -109,12 +107,10 @@ export default async function handler(req, res) {
       if (action === "buy") {
 
         if (!countryId || !service) {
-
           return res.status(400).json({
             success: false,
             error: "بيانات الطلب ناقصة"
           });
-
         }
 
         const buyParams =
@@ -144,7 +140,6 @@ export default async function handler(req, res) {
           Array.isArray(providerIds) &&
           providerIds.length > 0
         ) {
-
           buyParams.set(
             "providerIds",
             providerIds
@@ -153,57 +148,62 @@ export default async function handler(req, res) {
           );
         }
 
-
-        const apiRes = await fetch(
-          `${GRIZZLY_API}?${buyParams.toString()}`,
-          {
-            headers: {
-              "User-Agent":
-                "Techno-Pro-OTP/1.0",
-              "Accept":
-                "application/json,text/plain,*/*"
+        const apiRes =
+          await fetch(
+            `${GRIZZLY_API}?${buyParams.toString()}`,
+            {
+              headers: {
+                "User-Agent":
+                  "Techno-Pro-OTP/1.0",
+                "Accept":
+                  "application/json,text/plain,*/*"
+              }
             }
-          }
-        );
-
+          );
 
         const text =
           (await apiRes.text()).trim();
 
 
-        /*
-         * -------------------------------------------------
-         * V2 JSON RESPONSE
-         *
-         * Official format:
-         * {
-         *   activationId: ...,
-         *   phoneNumber: "...",
-         *   ...
-         * }
-         * -------------------------------------------------
-         */
+        /* =================================================
+           JSON RESPONSE
+           ================================================= */
+
+        let jsonResp = null;
 
         try {
-
-          const jsonResp =
+          jsonResp =
             JSON.parse(text);
+        } catch (_) {
+          jsonResp = null;
+        }
+
+
+        if (jsonResp) {
+
+          /*
+           * ندعم جميع الأسماء المحتملة
+           */
 
           const activationId =
             jsonResp.activationId ??
             jsonResp.activationID ??
+            jsonResp.activation_id ??
             jsonResp.id ??
+            jsonResp.activation ??
             "";
 
           const phoneNumber =
             jsonResp.phoneNumber ??
             jsonResp.phone ??
             jsonResp.number ??
+            jsonResp.phone_number ??
+            jsonResp.msisdn ??
             "";
 
+
           /*
-           * إذا كان Grizzly أعاد الرقم فعلاً،
-           * نرجعه للواجهة بدون فقدانه.
+           * حالة وجود الرقم فعليًا
            */
 
           if (
@@ -212,7 +212,6 @@ export default async function handler(req, res) {
           ) {
 
             return res.status(200).json({
-
               success: true,
 
               activationId:
@@ -228,61 +227,105 @@ export default async function handler(req, res) {
 
               activationCost:
                 jsonResp.activationCost ??
+                jsonResp.activation_cost ??
                 null,
 
               countryCode:
                 jsonResp.countryCode ??
+                jsonResp.country_code ??
                 null,
 
               activationTime:
                 jsonResp.activationTime ??
+                jsonResp.activation_time ??
                 null
-
             });
-
           }
 
 
           /*
-           * إذا أعاد Grizzly activationId فقط،
-           * لا نخترع رقمًا.
+           * بعض الردود قد تكون nested
+           */
+
+          const nested =
+            jsonResp.data ||
+            jsonResp.result ||
+            jsonResp.activation ||
+            null;
+
+          if (
+            nested &&
+            typeof nested === "object"
+          ) {
+
+            const nestedActivationId =
+              nested.activationId ??
+              nested.activationID ??
+              nested.activation_id ??
+              nested.id ??
+              activationId ??
+              "";
+
+            const nestedPhone =
+              nested.phoneNumber ??
+              nested.phone ??
+              nested.number ??
+              nested.phone_number ??
+              nested.msisdn ??
+              "";
+
+            if (
+              nestedActivationId &&
+              nestedPhone
+            ) {
+
+              return res.status(200).json({
+                success: true,
+
+                activationId:
+                  String(nestedActivationId),
+
+                phoneNumber:
+                  String(nestedPhone),
+
+                canGetAnotherSms:
+                  nested.canGetAnotherSms === true ||
+                  nested.canGetAnotherSms === 1 ||
+                  nested.canGetAnotherSms === "1"
+              });
+            }
+          }
+
+
+          /*
+           * activationId بدون رقم
            *
-           * نعيد الرد الأصلي للتشخيص بدل
-           * تحويله إلى queue بشكل صامت.
+           * لا نعتبره عملية شراء مكتملة.
            */
 
           if (activationId) {
 
             return res.status(200).json({
-
               success: false,
+
+              queue: false,
 
               activationId:
                 String(activationId),
 
               phoneNumber: "",
 
-              queue: false,
-
               error:
                 "GRIZZLY_RETURNED_ACTIVATION_WITHOUT_PHONE",
 
               raw: jsonResp
-
             });
-
           }
-
-        } catch (_) {
-          /*
-           * ليس JSON.
-           * ننتقل إلى صيغة ACCESS_NUMBER.
-           */
         }
 
 
         /* =================================================
-           ACCESS_NUMBER legacy response
+           ACCESS_NUMBER
            ================================================= */
 
         if (
@@ -304,7 +347,6 @@ export default async function handler(req, res) {
           ) {
 
             return res.status(200).json({
-
               success: true,
 
               activationId:
@@ -314,29 +356,21 @@ export default async function handler(req, res) {
                 String(phoneNumber),
 
               canGetAnotherSms: true
-
             });
-
           }
 
           return res.status(200).json({
-
             success: false,
-
             queue: false,
-
             error:
               "GRIZZLY_ACCESS_NUMBER_MISSING_PHONE",
-
             raw: text
-
           });
-
         }
 
 
         /* =================================================
-           Known Grizzly errors
+           KNOWN ERRORS
            ================================================= */
 
         if (
@@ -346,10 +380,11 @@ export default async function handler(req, res) {
           return res.status(200).json({
             success: false,
             queue: true,
-            error: "في انتظار توفر خط..."
+            error:
+              "في انتظار توفر خط..."
           });
-
         }
+
 
         if (
           text.includes("NO_BALANCE")
@@ -358,10 +393,11 @@ export default async function handler(req, res) {
           return res.status(200).json({
             success: false,
             queue: false,
-            error: "الرصيد غير كافٍ"
+            error:
+              "الرصيد غير كافٍ"
           });
-
         }
+
 
         if (
           text.includes("WRONG_SERVICE")
@@ -370,35 +406,30 @@ export default async function handler(req, res) {
           return res.status(200).json({
             success: false,
             queue: false,
-            error: "الخدمة غير متاحة"
+            error:
+              "الخدمة غير متاحة"
           });
-
         }
 
 
         /* =================================================
-           Unknown response
+           UNKNOWN RESPONSE
            ================================================= */
 
         return res.status(200).json({
-
           success: false,
-
           queue: false,
-
           error:
-            text || "UNKNOWN_GRIZZLY_RESPONSE",
-
+            text ||
+            "UNKNOWN_GRIZZLY_RESPONSE",
           raw: text
-
         });
-
       }
     }
 
 
     /* =====================================================
-       Query parameters
+       QUERY PARAMETERS
        ===================================================== */
 
     const {
@@ -423,9 +454,9 @@ export default async function handler(req, res) {
 
         return res.status(400).json({
           ok: false,
-          error: "INVALID_ACTIVATION_ID"
+          error:
+            "INVALID_ACTIVATION_ID"
         });
-
       }
 
       const url =
@@ -446,28 +477,28 @@ export default async function handler(req, res) {
         String(id)
       );
 
-
       const response =
-        await fetch(url.toString(), {
-          headers: {
-            "User-Agent":
-              "Techno-Pro-OTP/1.0"
+        await fetch(
+          url.toString(),
+          {
+            headers: {
+              "User-Agent":
+                "Techno-Pro-OTP/1.0"
+            }
           }
-        });
-
+        );
 
       const raw =
         (await response.text()).trim();
-
 
       if (!response.ok) {
 
         return res.status(502).json({
           ok: false,
-          error: "GRIZZLY_HTTP_ERROR",
+          error:
+            "GRIZZLY_HTTP_ERROR",
           raw
         });
-
       }
 
 
@@ -483,17 +514,11 @@ export default async function handler(req, res) {
             .trim();
 
         return res.status(200).json({
-
           ok: true,
-
           status: "STATUS_OK",
-
           code,
-
           raw
-
         });
-
       }
 
 
@@ -504,30 +529,19 @@ export default async function handler(req, res) {
       ) {
 
         return res.status(200).json({
-
           ok: true,
-
           status: raw,
-
           raw
-
         });
-
       }
 
 
       return res.status(200).json({
-
         ok: false,
-
         status: "ERROR",
-
         error: raw,
-
         raw
-
       });
-
     }
 
 
@@ -544,15 +558,17 @@ export default async function handler(req, res) {
 
         return res.status(400).json({
           ok: false,
-          error: "INVALID_ACTIVATION_ID"
+          error:
+            "INVALID_ACTIVATION_ID"
         });
-
       }
 
-
       const allowedStatuses =
-        new Set(["3", "6", "8"]);
-
+        new Set([
+          "3",
+          "6",
+          "8"
+        ]);
 
       if (
         !allowedStatuses.has(
@@ -561,22 +577,16 @@ export default async function handler(req, res) {
       ) {
 
         return res.status(400).json({
-
           ok: false,
-
           error:
             "INVALID_STATUS",
-
           allowed: [
             3,
             6,
             8
           ]
-
         });
-
       }
-
 
       const url =
         new URL(GRIZZLY_API);
@@ -601,7 +611,6 @@ export default async function handler(req, res) {
         String(status)
       );
 
-
       const response =
         await fetch(
           url.toString(),
@@ -613,24 +622,17 @@ export default async function handler(req, res) {
           }
         );
 
-
       const raw =
         (await response.text()).trim();
-
 
       if (!response.ok) {
 
         return res.status(502).json({
-
           ok: false,
-
           error:
             "GRIZZLY_HTTP_ERROR",
-
           raw
-
         });
-
       }
 
 
@@ -641,15 +643,10 @@ export default async function handler(req, res) {
       ) {
 
         return res.status(200).json({
-
           ok: true,
-
           status: raw,
-
           raw
-
         });
-
       }
 
 
@@ -658,18 +655,12 @@ export default async function handler(req, res) {
       ) {
 
         return res.status(409).json({
-
           ok: false,
-
           status:
             "EARLY_CANCEL_DENIED",
-
           error: raw,
-
           raw
-
         });
-
       }
 
 
@@ -679,32 +670,20 @@ export default async function handler(req, res) {
       ) {
 
         return res.status(400).json({
-
           ok: false,
-
           status: raw,
-
           error: raw,
-
           raw
-
         });
-
       }
 
 
       return res.status(200).json({
-
         ok: false,
-
         status: "ERROR",
-
         error: raw,
-
         raw
-
       });
-
     }
 
 
@@ -730,24 +709,22 @@ export default async function handler(req, res) {
         "getCountries"
       );
 
-
       const response =
         await fetch(
           url.toString()
         );
 
-
       const data =
         await response.json();
 
-
-      return res.status(200).json(data);
-
+      return res.status(200).json(
+        data
+      );
     }
 
 
     /* =====================================================
-       6. PRICES V3
+       6. PRICES / PROVIDERS
        ===================================================== */
 
     if (
@@ -768,39 +745,44 @@ export default async function handler(req, res) {
         "getPricesV3"
       );
 
-
       if (service) {
-
         url.searchParams.set(
           "service",
           service
         );
-
       }
 
-
       if (country) {
-
         url.searchParams.set(
           "country",
           country
         );
-
       }
-
 
       const response =
         await fetch(
           url.toString()
         );
 
+      if (!response.ok) {
+
+        const raw =
+          await response.text();
+
+        return res.status(502).json({
+          ok: false,
+          error:
+            "GRIZZLY_PRICES_HTTP_ERROR",
+          raw
+        });
+      }
 
       const data =
         await response.json();
 
-
-      return res.status(200).json(data);
-
+      return res.status(200).json(
+        data
+      );
     }
 
 
@@ -809,32 +791,19 @@ export default async function handler(req, res) {
        ===================================================== */
 
     return res.status(400).json({
-
       ok: false,
-
       error:
         "UNKNOWN_ACTION"
-
     });
 
   } catch (error) {
 
-    console.error(
-      "Techno Pro Grizzly Proxy Error:",
-      error
-    );
-
     return res.status(500).json({
-
       ok: false,
-
       error:
         "PROXY_ERROR",
-
       message:
         error.message
-
     });
-
   }
 }
