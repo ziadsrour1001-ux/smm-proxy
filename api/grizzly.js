@@ -1,5 +1,4 @@
 // api/grizzly.js
-
 const GRIZZLY_API = "https://api.grizzlysms.com/stubs/handler_api.php";
 const DEFAULT_KEY = "205837984918fa408d1ee6ce337bf04e";
 
