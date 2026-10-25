@@ -99,12 +99,13 @@ export default async function handler(req, res) {
         action,
         countryId,
         service,
-        providerIds
+        providerIds,
+        maxPrice
       } = body;
 
       if (action === "buy") {
 
-        if (!countryId || !service) {
+        if (countryId == null || String(countryId).trim() === "" || !service) {
           return res.status(400).json({
             success: false,
             error: "بيانات الطلب ناقصة"
@@ -123,6 +124,21 @@ export default async function handler(req, res) {
           "action",
           "getNumberV2"
         );
+
+        // Price ceilings are optional for legacy clients. New clients send
+        // the supplier-currency ceiling they explicitly selected.
+        const hasPriceCap = maxPrice !== undefined &&
+          maxPrice !== null && String(maxPrice).trim() !== "";
+        if (hasPriceCap) {
+          const cap = Number(maxPrice);
+          if (!Number.isFinite(cap) || cap <= 0 || cap > 1000) {
+            return res.status(400).json({
+              success: false,
+              error: "INVALID_MAX_PRICE"
+            });
+          }
+          buyParams.set("maxPrice", String(cap));
+        }
 
         buyParams.set(
           "service",
@@ -227,6 +243,8 @@ export default async function handler(req, res) {
                 jsonResp.activationCost ??
                 jsonResp.activation_cost ??
                 null,
+              currency:
+                jsonResp.currency ?? null,
 
               countryCode:
                 jsonResp.countryCode ??
@@ -289,7 +307,22 @@ export default async function handler(req, res) {
                 canGetAnotherSms:
                   nested.canGetAnotherSms === true ||
                   nested.canGetAnotherSms === 1 ||
-                  nested.canGetAnotherSms === "1"
+                  nested.canGetAnotherSms === "1",
+
+                activationCost:
+                  nested.activationCost ??
+                  nested.activation_cost ??
+                  jsonResp.activationCost ??
+                  jsonResp.activation_cost ??
+                  null,
+                currency:
+                  nested.currency ?? jsonResp.currency ?? null,
+                countryCode:
+                  nested.countryCode ?? nested.country_code ??
+                  jsonResp.countryCode ?? jsonResp.country_code ?? null,
+                activationTime:
+                  nested.activationTime ?? nested.activation_time ??
+                  jsonResp.activationTime ?? jsonResp.activation_time ?? null
               });
             }
           }
