@@ -827,6 +827,25 @@ export default async function handler(req, res) {
 
 
     /* =====================================================
+       READ-ONLY: CURRENT SERVICES CATALOG
+       ===================================================== */
+    if (req.method === "GET" &&
+        (action === "getServicesList" || action === "servicesList")) {
+      const url = new URL(GRIZZLY_API);
+      url.searchParams.set("api_key", API_KEY);
+      url.searchParams.set("action", "getServicesList");
+      const response = await fetch(url.toString(), {
+        headers: {"User-Agent": "Techno-Pro-OTP/1.0", "Accept": "application/json,text/plain,*/*"}
+      });
+      const raw = (await response.text()).trim();
+      if (!response.ok) return res.status(502).json({ok:false,error:"GRIZZLY_SERVICES_HTTP_ERROR"});
+      let data;
+      try { data = JSON.parse(raw); }
+      catch (_) { return res.status(200).json({ok:false,error:raw||"GRIZZLY_SERVICES_UNAVAILABLE"}); }
+      return res.status(200).json(data);
+    }
+
+    /* =====================================================
        UNKNOWN ACTION
        ===================================================== */
 
