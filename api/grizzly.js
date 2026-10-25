@@ -3,8 +3,7 @@
 const GRIZZLY_API =
   "https://api.grizzlysms.com/stubs/handler_api.php";
 
-// المفتاح الخاص بك
-const DEFAULT_KEY = "205837984918fa408d1ee6ce337bf04e";
+// يستخدم المفتاح المخزن في إعدادات Vercel فقط.
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -22,8 +21,7 @@ export default async function handler(req, res) {
     return res.status(204).end();
   }
 
-  const API_KEY =
-    process.env.GRIZZLY_API_KEY || DEFAULT_KEY;
+  const API_KEY = process.env.GRIZZLY_API_KEY;
 
   if (!API_KEY || API_KEY === "YOUR_EXISTING_GRIZZLY_KEY") {
     return res.status(500).json({
