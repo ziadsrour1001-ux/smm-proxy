@@ -760,7 +760,8 @@ export default async function handler(req, res) {
 
     if (
       action === "getPrices" ||
-      action === "prices"
+      action === "prices" ||
+      action === "getPriceOptions"
     ) {
 
       const url =
@@ -773,7 +774,7 @@ export default async function handler(req, res) {
 
       url.searchParams.set(
         "action",
-        "getPricesV3"
+        action === "getPriceOptions" ? "getPricesV2" : "getPricesV3"
       );
 
       if (service) {
@@ -808,12 +809,20 @@ export default async function handler(req, res) {
         });
       }
 
-      const data =
-        await response.json();
-
-      return res.status(200).json(
-        data
-      );
+      // PriceV2 may return a plain BAD_ACTION when it is not supported
+      // by a particular account. Surface that clearly to the UI.
+      const rawText = (await response.text()).trim();
+      let data;
+      try { data = JSON.parse(rawText); } catch (_) {
+        if (action === "getPriceOptions") {
+          return res.status(200).json({
+            ok: false,
+            error: rawText || "GRIZZLY_PRICES_V2_UNAVAILABLE"
+          });
+        }
+        return res.status(502).json({ok:false,error:"INVALID_GRIZZLY_PRICES_RESPONSE"});
+      }
+      return res.status(200).json(data);
     }
 
 
