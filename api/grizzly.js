@@ -13,7 +13,7 @@ export default async function handler(req, res) {
   );
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type"
+    "Content-Type, X-TP-Test-Token"
   );
   res.setHeader("Cache-Control", "no-store");
 
@@ -31,6 +31,27 @@ export default async function handler(req, res) {
   }
 
   try {
+
+  // V73 staged access control: privileged mutation and activation reads.
+  // Private testing only. For public launch, replace with real per-user
+  // identity verification, durable order ownership and server-side wallet.
+  const protectedAction = req.method === "POST" ||
+    (req.method === "GET" &&
+      ["getStatus", "setStatus"].includes(String(req.query?.action || "")));
+  if (protectedAction) {
+    const configured = process.env.TP_OTP_ADMIN_TOKEN || "";
+    if (configured.length < 32) {
+      return res.status(503).json({ok:false,error:"OTP_PRIVATE_TEST_LOCKED"});
+    }
+    const supplied = req.headers["x-tp-test-token"] || "";
+    const a = Buffer.from(configured, "utf8");
+    const b = Buffer.from(String(supplied), "utf8");
+    // timing-safe comparison does not reveal token prefix.
+    const { timingSafeEqual } = await import("node:crypto");
+    if (a.length !== b.length || !timingSafeEqual(a,b)) {
+      return res.status(403).json({ok:false,error:"OTP_PRIVATE_TEST_AUTH_REQUIRED"});
+    }
+  }
 
     /* =====================================================
        1. SERVICE IMAGE
